@@ -1,0 +1,57 @@
+#property copyright "Koder"
+#property link "your web site"
+#property version "1.00"
+
+input double vol = 0.1;
+input int Tp_pts = 200;
+input int SL_pts = 150;
+input double target_profit_currency = 10.0; // Close positions when profit reaches this amount in currency
+
+#include <Trade\Trade.mqh>
+CTrade trade;
+
+void OnTick() {
+    int RSI_handle = iRSI(Symbol(), PERIOD_CURRENT, 14, PRICE_CLOSE);
+    double RSI_arr[];
+    CopyBuffer(RSI_handle, 0, 0, 1, RSI_arr);
+    double RSI = NormalizeDouble(RSI_arr[0], 2);
+
+    int openPositions = PositionsTotal();
+
+    if (openPositions < 1) {
+        double Ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+        double Bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+
+        if (RSI < 50 && RSI > 45) {
+            trade.Sell(vol, NULL, Bid, (Bid + SL_pts * _Point), (Bid - Tp_pts * _Point));
+        }
+        if (RSI > 50 && RSI < 55) {
+            trade.Buy(vol, NULL, Ask, (Ask + SL_pts * _Point), (Ask - Tp_pts * _Point));
+        }
+    }
+
+    // Call closeProfitAt with the global variable
+    closeProfitAt();
+}
+
+//+----+//
+//+------------------------------------+
+//        close profit
+//+------------------------------------+
+void closeProfitAt() {
+    for (int i = 0; i < PositionsTotal(); i++) {
+        if (PositionGetSymbol(i) == _Symbol) {
+            ulong ticket = PositionGetTicket(i);
+            PositionSelectByTicket(ticket);
+
+            // Get position profit in currency
+            double pft = PositionGetDouble(POSITION_PROFIT);
+
+            // Close position if actual profit meets or exceeds target profit
+            if (pft >= target_profit_currency) {
+                trade.PositionClose(ticket);
+                Print(StringFormat("CloseProfitAt closed ticket #%d at %.2f profit in currency", ticket, pft));
+            }
+        }
+    }
+}
